@@ -8,36 +8,35 @@ from langchain_openai import OpenAIEmbeddings
 
 st.title("📘 CFA Tutor App")
 
-# Input field for API key
+# API Key input
 openai_api_key = st.text_input("🔑 Enter your OpenAI API Key:", type="password")
 
 # File upload
 uploaded_file = st.file_uploader("📄 Upload your CFA PDF (e.g., Ethics)", type="pdf")
 
-# User input for question
+# Question input
 query = st.text_input("💬 Ask your CFA question:")
 
-# Process if all inputs are available
-if uploaded_file and openai_api_key and query:
-    # Save the uploaded PDF
+# Submit button
+if st.button("✅ Get Answer") and uploaded_file and openai_api_key and query:
     with open("temp.pdf", "wb") as f:
         f.write(uploaded_file.read())
 
-    # Load and split PDF
+    # Process PDF
     loader = PyPDFLoader("temp.pdf")
     pages = loader.load()
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     chunks = splitter.split_documents(pages)
 
-    # Initialize embeddings with the API key
+    # Create vectorstore
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vectorstore = FAISS.from_documents(chunks, embeddings)
 
-    # Search for relevant chunks
+    # Search for similar content
     results = vectorstore.similarity_search(query, k=3)
     context = "\n\n".join([doc.page_content for doc in results])
 
-    # Prepare and call OpenAI
+    # Run OpenAI
     client = openai.OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
         model="gpt-3.5-turbo-0125",
@@ -61,6 +60,6 @@ if uploaded_file and openai_api_key and query:
         temperature=0.4,
     )
 
-    # Display the answer
+    # Show answer
     st.markdown("### 🤖 Answer")
     st.markdown(response.choices[0].message.content)
