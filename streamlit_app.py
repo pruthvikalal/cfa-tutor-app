@@ -8,16 +8,16 @@ from langchain_openai import OpenAIEmbeddings
 
 st.title("📘 CFA Tutor App")
 
-# Get OpenAI API key
+# API Key
 openai_api_key = st.text_input("🔑 Enter your OpenAI API Key:", type="password")
 
-# Upload PDF
+# File uploader
 uploaded_file = st.file_uploader("📄 Upload your CFA PDF (e.g., Ethics)", type="pdf")
 
-# Ask a question
+# Question input
 query = st.text_input("💬 Ask your CFA question:")
 
-# Run when button is clicked
+# Submit button
 if st.button("✅ Get Answer"):
     if not openai_api_key:
         st.error("❌ Please enter your OpenAI API key.")
@@ -27,25 +27,39 @@ if st.button("✅ Get Answer"):
         st.error("❌ Please enter a CFA question.")
     else:
         try:
-            # Save uploaded file temporarily
-            with open("temp.pdf", "wb") as f:
+            # Setup
+            os.makedirs("cache", exist_ok=True)
+            os.makedirs("faiss_store", exist_ok=True)
+
+            # Save PDF to cache
+            filename = uploaded_file.name
+            pdf_path = os.path.join("cache", filename)
+            with open(pdf_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-            # Load and chunk PDF
-            loader = PyPDFLoader("temp.pdf")
-            pages = loader.load()
-            splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-            chunks = splitter.split_documents(pages)
+            # Paths for FAISS storage
+            index_folder = os.path.join("faiss_store", filename.split(".")[0])
 
-            # Embed and create vectorstore
+            # Embedding model
             embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-            vectorstore = FAISS.from_documents(chunks, embeddings)
 
-            # Similarity search
+            # Load or create FAISS index
+            if os.path.exists(index_folder):
+                vectorstore = FAISS.load_local(index_folder, embeddings)
+            else:
+                loader = PyPDFLoader(pdf_path)
+                pages = loader.load()
+                splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+                chunks = splitter.split_documents(pages)
+
+                vectorstore = FAISS.from_documents(chunks, embeddings)
+                vectorstore.save_local(index_folder)
+
+            # Search relevant chunks
             results = vectorstore.similarity_search(query, k=3)
             context = "\n\n".join([doc.page_content for doc in results])
 
-            # Run GPT
+            # Ask OpenAI
             client = openai.OpenAI(api_key=openai_api_key)
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo-0125",
@@ -69,7 +83,6 @@ if st.button("✅ Get Answer"):
                 temperature=0.4,
             )
 
-            # Show answer
             st.markdown("### 🤖 Answer")
             st.markdown(response.choices[0].message.content)
 
