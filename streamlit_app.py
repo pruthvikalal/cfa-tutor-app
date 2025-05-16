@@ -8,16 +8,16 @@ from langchain_openai import OpenAIEmbeddings
 
 st.title("📘 CFA Tutor App")
 
-# API Key
+# Input API key
 openai_api_key = st.text_input("🔑 Enter your OpenAI API Key:", type="password")
 
-# File uploader
+# Upload PDF
 uploaded_file = st.file_uploader("📄 Upload your CFA PDF (e.g., Ethics)", type="pdf")
 
-# Question input
+# User question
 query = st.text_input("💬 Ask your CFA question:")
 
-# Submit button
+# On button click
 if st.button("✅ Get Answer"):
     if not openai_api_key:
         st.error("❌ Please enter your OpenAI API key.")
@@ -27,25 +27,24 @@ if st.button("✅ Get Answer"):
         st.error("❌ Please enter a CFA question.")
     else:
         try:
-            # Setup
+            # Create necessary folders
             os.makedirs("cache", exist_ok=True)
             os.makedirs("faiss_store", exist_ok=True)
 
-            # Save PDF to cache
+            # Save PDF file to cache folder
             filename = uploaded_file.name
             pdf_path = os.path.join("cache", filename)
             with open(pdf_path, "wb") as f:
                 f.write(uploaded_file.read())
 
-            # Paths for FAISS storage
+            # Set vectorstore folder path
             index_folder = os.path.join("faiss_store", filename.split(".")[0])
 
-            # Embedding model
+            # Load or create vectorstore
             embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
 
-            # Load or create FAISS index
             if os.path.exists(index_folder):
-                vectorstore = FAISS.load_local(index_folder, embeddings)
+                vectorstore = FAISS.load_local(index_folder, embeddings, allow_dangerous_deserialization=True)
             else:
                 loader = PyPDFLoader(pdf_path)
                 pages = loader.load()
@@ -83,6 +82,7 @@ if st.button("✅ Get Answer"):
                 temperature=0.4,
             )
 
+            # Show answer
             st.markdown("### 🤖 Answer")
             st.markdown(response.choices[0].message.content)
 
